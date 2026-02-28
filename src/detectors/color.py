@@ -1,180 +1,236 @@
+
+
 import cv2
 import numpy as np
+from typing import List, Dict, Tuple, Optional
+import time
 
-def detect_colors_from_hsv(hsv_image, target_color="red", min_area=100):
+class ColorDetector:
     """
-    从已预处理的HSV图像中检测特定颜色区域，标记并输出几何信息
-    
-    参数:
-        hsv_image: 已预处理的HSV图像
-        target_color: 要检测的颜色 ['red', 'green', 'blue', 'yellow']
-        min_area: 最小检测面积（过滤小噪点）
-    
-    返回:
-        img_result: 绘制结果的BGR图像
-        mask: 颜色掩膜
-        detection_info: 检测结果列表
+    颜色检测器
+    检测指定颜色的目标，返回检测结果和掩码
     """
-    # 1. 验证输入图像
-    if hsv_image is None or len(hsv_image.shape) != 3 or hsv_image.shape[2] != 3:
-        print("错误：输入必须是3通道的HSV图像")
-        return None, None, None
     
-    # 检查是否为有效的HSV范围
-    h, s, v = cv2.split(hsv_image)
-    if h.max() > 180 or s.max() > 255 or v.max() > 255:
-        print("警告：输入的HSV值可能超出标准范围")
-    
-    # 2. 转换为BGR用于显示结果
-    img_result = cv2.cvtColor(hsv_image, cv2.COLOR_HSV2BGR)
-    
-    # 3. 定义颜色范围（HSV空间）- 针对已预处理图像的标准范围
-    color_ranges = {
-        'red': [
-            ([0, 100, 100], [10, 255, 255]),     # 红色范围1
-            ([160, 100, 100], [180, 255, 255])   # 红色范围2
-        ],
-        'green': [([40, 100, 100], [80, 255, 255])],      # 绿色范围
-        'blue': [([100, 100, 100], [130, 255, 255])],     # 蓝色范围
-        'yellow': [([20, 100, 100], [40, 255, 255])],     # 黄色范围
-        'orange': [([10, 100, 100], [20, 255, 255])],     # 橙色范围
-        'purple': [([130, 100, 100], [150, 255, 255])],   # 紫色范围
-        'cyan': [([85, 100, 100], [100, 255, 255])],      # 青色范围
-        'pink': [([150, 50, 150], [170, 200, 255])]       # 粉色范围
-    }
-    
-    if target_color not in color_ranges:
-        print(f"错误：不支持的颜色 '{target_color}'")
-        print(f"支持的颜色: {list(color_ranges.keys())}")
-        return None, None, None
-    
-    # 4. 创建颜色掩膜
-    mask = np.zeros(hsv_image.shape[:2], dtype=np.uint8)
-    
-    for lower, upper in color_ranges[target_color]:
-        lower_np = np.array(lower, dtype=np.uint8)
-        upper_np = np.array(upper, dtype=np.uint8)
-        color_mask = cv2.inRange(hsv_image, lower_np, upper_np)
-        mask = cv2.bitwise_or(mask, color_mask)
-    
-    # 5. 形态学优化
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)   # 去除小噪声
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)  # 填充小孔洞
-    
-    # 6. 查找轮廓
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    color_count = 0
-    detection_info = []
-    
-    print("="*50)
-    print(f"{target_color.capitalize()}颜色区域识别结果：")
-    print("="*50)
-    print(f"输入图像形状: {hsv_image.shape}")
-    print(f"掩膜中白色像素数: {np.count_nonzero(mask)}")
-    
-    # 7. 遍历轮廓并筛选有效区域
-    for cnt in contours:
-        # 计算轮廓面积
-        area = cv2.contourArea(cnt)
-        if area < min_area:
-            continue
+    def __init__(self, 
+                 target_color: str = "red",
+                 min_area: int = 100,
+                 confidence_threshold: float = 0.3,
+                 enable_morphology: bool = True,
+                 morph_kernel_size: int = 5):
+        """
+        初始化颜色检测器
         
-        color_count += 1
+        Args:
+            target_color: 检测的目标颜色 ('red', 'green', 'blue', 'yellow', 'orange', 'purple')
+            min_area: 最小检测面积（像素）
+            confidence_threshold: 置信度阈值
+            enable_morphology: 是否启用形态学优化
+            morph_kernel_size: 形态学核大小
+        """
+        self.target_color = target_color.lower()
+        self.min_area = min_area
+        self.confidence_threshold = confidence_threshold
+        self.enable_morphology = enable_morphology
         
-        # 计算外接矩形
-        rect = cv2.minAreaRect(cnt)
-        (center_x, center_y), (width, height), angle = rect
+        # HSV颜色范围
+        self.color_ranges = {
+            'red': [[[0, 100, 100], [10, 255, 255]], 
+                   [[160, 100, 100], [180, 255, 255]]],
+            'green': [[[40, 100, 100], [80, 255, 255]]],
+            'blue': [[[100, 100, 100], [130, 255, 255]]],
+            'yellow': [[[20, 100, 100], [40, 255, 255]]],
+            'orange': [[[10, 100, 100], [20, 255, 255]]],
+            'purple': [[[130, 100, 100], [150, 255, 255]]]
+        }
         
-        # 修正角度
-        if width < height:
-            width, height = height, width
-            angle = angle + 90
-        angle = round(angle, 2) if abs(angle) > 0.01 else 0.0
+        # 形态学核
+        if enable_morphology:
+            self.morph_kernel = cv2.getStructuringElement(
+                cv2.MORPH_ELLIPSE, 
+                (morph_kernel_size, morph_kernel_size)
+            )
         
-        # 计算长宽比
-        aspect_ratio = round(width / height, 4) if height != 0 else 0
+        # 统计
+        self.total_detections = 0
+        self.processing_times = []
+    
+    def detect(self, hsv_image: np.ndarray, verbose: bool = True) -> Tuple[List[Dict], np.ndarray]:
+        """
+        从HSV图像中检测颜色目标
         
-        # 计算圆形度
-        perimeter = cv2.arcLength(cnt, True)
+        Args:
+            hsv_image: HSV格式的图像
+            verbose: 是否输出详细信息
+            
+        Returns:
+            Tuple[List[Dict], np.ndarray]: 
+                - 检测结果列表，每个元素是包含目标信息的字典
+                - 二值掩码图像，检测到的区域为255
+        """
+        start_time = time.time()
+        
+        # 1. 检查颜色是否支持
+        if self.target_color not in self.color_ranges:
+            if verbose:
+                print(f"错误: 不支持的颜色 '{self.target_color}'")
+            return [], np.zeros(hsv_image.shape[:2], dtype=np.uint8)
+        
+        # 2. 创建颜色掩膜
+        mask = self._create_color_mask(hsv_image)
+        
+        # 3. 优化掩膜
+        if self.enable_morphology:
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.morph_kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.morph_kernel)
+        
+        # 4. 查找轮廓
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # 5. 分析轮廓
+        detections = []
+        for i, cnt in enumerate(contours, 1):
+            detection = self._analyze_contour(cnt, i)
+            if detection:
+                detections.append(detection)
+        
+        # 6. 计算处理时间
+        processing_time = (time.time() - start_time) * 1000
+        self.processing_times.append(processing_time)
+        self.total_detections += len(detections)
+        
+        # 7. 输出信息
+        if verbose:
+            self._print_detection_info(detections, processing_time, mask)
+        
+        return detections, mask
+    
+    def detect_from_bgr(self, bgr_image: np.ndarray, verbose: bool = True) -> Tuple[List[Dict], np.ndarray]:
+        """
+        从BGR图像中检测颜色目标
+        
+        Args:
+            bgr_image: BGR格式的图像
+            verbose: 是否输出详细信息
+            
+        Returns:
+            Tuple[List[Dict], np.ndarray]: 检测结果和掩码
+        """
+        hsv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
+        return self.detect(hsv_image, verbose)
+    
+    def _create_color_mask(self, hsv_image: np.ndarray) -> np.ndarray:
+        """创建颜色掩膜"""
+        mask = np.zeros(hsv_image.shape[:2], dtype=np.uint8)
+        
+        for lower, upper in self.color_ranges[self.target_color]:
+            lower_np = np.array(lower, dtype=np.uint8)
+            upper_np = np.array(upper, dtype=np.uint8)
+            color_mask = cv2.inRange(hsv_image, lower_np, upper_np)
+            mask = cv2.bitwise_or(mask, color_mask)
+        
+        return mask
+    
+    def _analyze_contour(self, contour: np.ndarray, detection_id: int) -> Optional[Dict]:
+        """分析单个轮廓"""
+        # 计算面积
+        area = cv2.contourArea(contour)
+        if area < self.min_area:
+            return None
+        
+        # 计算最小外接矩形
+        rect = cv2.minAreaRect(contour)
+        (x, y), (w, h), angle = rect
+        
+        # 计算周长和圆形度
+        perimeter = cv2.arcLength(contour, True)
         if perimeter > 0:
-            circularity = round(4 * np.pi * area / (perimeter * perimeter), 4)
+            circularity = 4 * np.pi * area / (perimeter * perimeter)
         else:
             circularity = 0
         
-        # 计算凸包和实心度
-        hull = cv2.convexHull(cnt)
-        hull_area = cv2.contourArea(hull)
-        solidity = round(area / hull_area, 4) if hull_area > 0 else 0
+        # 计算置信度
+        confidence = min(circularity, 1.0)
+        if confidence < self.confidence_threshold:
+            return None
         
-        # 获取边界框顶点
-        box = cv2.boxPoints(rect)
-        box = np.int32(box)
-        
-        # 8. 绘制结果
-        # 颜色映射
-        color_map = {
-            'red': (0, 0, 255),        # 红色
-            'green': (0, 255, 0),      # 绿色
-            'blue': (255, 0, 0),       # 蓝色
-            'yellow': (0, 255, 255),   # 黄色
-            'orange': (0, 165, 255),   # 橙色
-            'purple': (128, 0, 128),   # 紫色
-            'cyan': (255, 255, 0),     # 青色
-            'pink': (203, 192, 255)    # 粉色
+        # 创建检测结果
+        return {
+            'id': detection_id,
+            'color': self.target_color,
+            'center_x': float(x),
+            'center_y': float(y),
+            'width': float(w),
+            'height': float(h),
+            'area': float(area),
+            'aspect_ratio': float(w / h) if h > 0 else 0,
+            'circularity': float(circularity),
+            'confidence': float(confidence),
+            'angle': float(angle)
         }
-        
-        contour_color = color_map.get(target_color, (0, 255, 0))
-        
-        # 绘制轮廓
-        cv2.drawContours(img_result, [box], 0, contour_color, 2)
-        
-        # 绘制中心点
-        center = (int(center_x), int(center_y))
-        cv2.circle(img_result, center, 6, contour_color, -1)
-        cv2.circle(img_result, center, 8, (255, 255, 255), 2)
-        
-        # 标注区域编号
-        cv2.putText(img_result, f"{target_color[0].upper()}{color_count}", 
-                   (center[0] - 20, center[1]), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, contour_color, 2)
-        
-        # 标注面积
-        cv2.putText(img_result, f"Area: {int(area)}", 
-                   (center[0] - 30, center[1] + 20), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, contour_color, 1)
-        
-        # 9. 存储检测信息
-        detection_info.append({
-            'id': color_count,
-            'color': target_color,
-            'center_x': round(center_x, 2),
-            'center_y': round(center_y, 2),
-            'width': round(width, 2),
-            'height': round(height, 2),
-            'area': int(area),
-            'aspect_ratio': aspect_ratio,
-            'angle': angle,
-            'circularity': circularity,
-            'solidity': solidity,
-            'perimeter': round(perimeter, 2)
-        })
-        
-        # 10. 输出信息
-        print(f"\n【{target_color.capitalize()}区域 {color_count}】")
-        print(f"  中心坐标: ({round(center_x, 2)}, {round(center_y, 2)})")
-        print(f"  尺寸: {round(width, 2)} × {round(height, 2)} 像素")
-        print(f"  长宽比: {aspect_ratio}")
-        print(f"  旋转角度: {angle}°")
-        print(f"  面积: {int(area)} 像素²")
-        print(f"  圆形度: {circularity} (1.0=完美圆形)")
-        print(f"  实心度: {solidity} (1.0=完美实心)")
     
-    # 11. 最终输出
-    if color_count == 0:
-        print(f"\n未检测到符合条件的{target_color}区域！")
+    def _print_detection_info(self, detections: List[Dict], processing_time: float, mask: np.ndarray):
+        """打印检测信息"""
+        if not detections:
+            print(f"未检测到 {self.target_color} 目标")
+            print(f"处理时间: {processing_time:.1f}ms")
+            print(f"掩码尺寸: {mask.shape}")
+            return
+        
+        print(f"检测到 {len(detections)} 个 {self.target_color} 目标")
+        print(f"处理时间: {processing_time:.1f}ms")
+        print(f"掩码尺寸: {mask.shape}, 非零像素: {cv2.countNonZero(mask)}")
+        print("-" * 40)
+        
+        for det in detections:
+            print(f"  ID:{det['id']} 中心({det['center_x']:.0f},{det['center_y']:.0f}) "
+                  f"尺寸:{det['width']:.0f}x{det['height']:.0f} "
+                  f"面积:{det['area']:.0f} 置信度:{det['confidence']:.2f}")
+    
+    def get_statistics(self) -> Dict:
+        """获取统计信息"""
+        if not self.processing_times:
+            return {}
+        
+        return {
+            'total_detections': self.total_detections,
+            'avg_processing_time_ms': np.mean(self.processing_times) if self.processing_times else 0,
+            'config': {
+                'target_color': self.target_color,
+                'min_area': self.min_area,
+                'confidence_threshold': self.confidence_threshold
+            }
+        }
+    
+    def reset_statistics(self):
+        """重置统计信息"""
+        self.total_detections = 0
+        self.processing_times = []
+
+# 快速使用函数
+def detect_color_with_mask(image: np.ndarray, 
+                          target_color: str = "red",
+                          min_area: int = 100,
+                          verbose: bool = True) -> Tuple[List[Dict], np.ndarray]:
+    """
+    快速检测颜色并返回掩码
+    
+    Args:
+        image: 输入图像（BGR或HSV）
+        target_color: 目标颜色
+        min_area: 最小面积
+        verbose: 是否输出信息
+        
+    Returns:
+        Tuple[List[Dict], np.ndarray]: 检测结果和掩码
+    """
+    detector = ColorDetector(
+        target_color=target_color,
+        min_area=min_area
+    )
+    
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        # 假设是BGR图像
+        return detector.detect_from_bgr(image, verbose)
     else:
-        print(f"\n共检测到 {color_count} 个{target_color}区域")
-    
-    return img_result, mask, detection_info
+        # 假设是HSV图像
+        return detector.detect(image, verbose)
