@@ -144,7 +144,7 @@ def detect_rectangles(image_path, min_area=1):
     }
 
 
-def detect_circles(image_path, min_area=1, min_circularity=0.75, max_aspect_ratio_diff=0.2):
+def detect_circles(image_path, min_area=1, min_circularity=0.5, max_aspect_ratio_diff=0.2):
     """
     检测图片中的圆形，标记并返回几何信息
     
