@@ -5,18 +5,6 @@ import numpy as np
 def detect_rectangles(gray, img_shape, min_area=1, return_intermediate=False):
     """
     检测灰度图像中的矩形，返回几何信息和掩码
-    
-    参数:
-        gray: 输入灰度图像
-        img_shape: 原始图像尺寸 (height, width)
-        min_area: 最小检测面积（过滤小噪点）
-        return_intermediate: 是否返回中间处理结果
-    
-    返回:
-        tuple: (rectangles, mask, intermediate_images) 或 (rectangles, mask)
-            rectangles: 矩形列表
-            mask: 二值掩码图像
-            intermediate_images: 中间处理结果字典（仅当 return_intermediate=True 时返回）
     """
     intermediate_images = {}
     
@@ -30,14 +18,9 @@ def detect_rectangles(gray, img_shape, min_area=1, return_intermediate=False):
     if return_intermediate:
         intermediate_images['02_edges_canny'] = edges_canny
     
-    # 3. 二值化（增强边缘）
-    _, binary_thresh = cv2.threshold(edges_canny, 127, 255, cv2.THRESH_BINARY)
-    if return_intermediate:
-        intermediate_images['03_binary_thresh'] = binary_thresh
-    
     # 4. 膨胀操作（闭合断裂的边缘）
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (8, 8))
-    dilated = cv2.dilate(binary_thresh, kernel, iterations=1)
+    dilated = cv2.dilate(edges_canny, kernel, iterations=1)
     if return_intermediate:
         intermediate_images['04_dilated'] = dilated
     
@@ -61,37 +44,98 @@ def detect_rectangles(gray, img_shape, min_area=1, return_intermediate=False):
         if area < min_area:
             continue
         
-        epsilon = 0.015 * cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, epsilon, False)
+        # 优化轮廓近似，使用动态epsilon值
+        arc_length = cv2.arcLength(cnt, True)
+        epsilon = 0.03 * arc_length  # 更大的epsilon值，适应倾斜矩形
+        approx = cv2.approxPolyDP(cnt, epsilon, True)
+        
+        # 确保approx是正确的形状
+        approx = np.squeeze(approx)
         
         if len(approx) == 4:
-            rectangle_count += 1
+            # 计算轮廓面积和凸包面积的比例，确保形状接近凸形
+            hull = cv2.convexHull(cnt)
+            hull_area = cv2.contourArea(hull)
+            if hull_area > 0:
+                solidity = area / hull_area
+                if solidity < 0.8:  # 排除凹形
+                    continue
             
+            # 使用minAreaRect来辅助判断
             rect = cv2.minAreaRect(cnt)
-            (center_x, center_y), (width, height), angle = rect
+            (center, (width, height), angle) = rect
             
-            if width < height:
-                width, height = height, width
-                angle = angle + 90 if angle != 0 else 90
-            angle = round(angle, 2) if abs(angle) > 0.01 else 0.0
+            # 计算宽高比，排除过于细长的形状
+            min_dim = min(width, height)
+            max_dim = max(width, height)
+            if min_dim > 0:
+                aspect_ratio = max_dim / min_dim
+                if aspect_ratio > 10:  # 更宽松的宽高比限制
+                    continue
             
-            aspect_ratio = round(width / height, 4) if height != 0 else 0
+            # 改进的内角计算
+            is_rectangle = True
+            angles = []
             
-            box = cv2.boxPoints(rect)
-            box = np.int32(box)
+            for i in range(4):
+                # 三个连续的点
+                p1 = approx[i]
+                p2 = approx[(i+1)%4]
+                p3 = approx[(i+2)%4]
+                
+                # 计算向量
+                v1 = p1 - p2
+                v2 = p3 - p2
+                
+                # 计算夹角（弧度）
+                dot_product = np.dot(v1, v2)
+                norm_v1 = np.linalg.norm(v1)
+                norm_v2 = np.linalg.norm(v2)
+                
+                if norm_v1 > 0 and norm_v2 > 0:
+                    angle_rad = np.arccos(dot_product / (norm_v1 * norm_v2))
+                    angle_deg = np.degrees(angle_rad)
+                    angles.append(angle_deg)
+                    # 更宽松的角度范围，适应45度倾斜的正方形
+                    if angle_deg < 70 or angle_deg > 110:
+                        is_rectangle = False
+                        break
             
-            cv2.drawContours(mask, [box], 0, 255, -1)
+            # 额外的矩形判断条件
+            if is_rectangle and len(angles) == 4:
+                # 检查角度的一致性
+                angle_std = np.std(angles)
+                if angle_std > 15:  # 角度标准差过大，不是矩形
+                    is_rectangle = False
             
-            rectangles.append({
-                'id': rectangle_count,
-                'center': (round(center_x, 2), round(center_y, 2)),
-                'long_side': round(width, 2),
-                'short_side': round(height, 2),
-                'aspect_ratio': aspect_ratio,
-                'angle': angle,
-                'area': round(area, 2),
-                'contour': box
-            })
+            if is_rectangle:
+                rectangle_count += 1
+                
+                rect = cv2.minAreaRect(cnt)
+                (center_x, center_y), (width, height), angle = rect
+                
+                if width < height:
+                    width, height = height, width
+                    angle = angle + 90 if angle != 0 else 90
+                angle = round(angle, 2) if abs(angle) > 0.01 else 0.0
+                
+                aspect_ratio = round(width / height, 4) if height != 0 else 0
+                
+                box = cv2.boxPoints(rect)
+                box = np.int32(box)
+                
+                cv2.drawContours(mask, [box], 0, 255, -1)
+                
+                rectangles.append({
+                    'id': rectangle_count,
+                    'center': (round(center_x, 2), round(center_y, 2)),
+                    'long_side': round(width, 2),
+                    'short_side': round(height, 2),
+                    'aspect_ratio': aspect_ratio,
+                    'angle': angle,
+                    'area': round(area, 2),
+                    'contour': box
+                })
 
     if return_intermediate:
         return rectangles, mask, intermediate_images
@@ -101,20 +145,6 @@ def detect_rectangles(gray, img_shape, min_area=1, return_intermediate=False):
 def detect_circles(gray, img_shape, min_area=1, min_circularity=0.75, max_aspect_ratio_diff=0.2, return_intermediate=False):
     """
     检测灰度图像中的圆形，返回几何信息和掩码
-    
-    参数:
-        gray: 输入灰度图像
-        img_shape: 原始图像尺寸 (height, width)
-        min_area: 最小检测面积（过滤小噪点）
-        min_circularity: 最小圆度阈值
-        max_aspect_ratio_diff: 最大宽高比差异
-        return_intermediate: 是否返回中间处理结果
-    
-    返回:
-        tuple: (circles, mask, intermediate_images) 或 (circles, mask)
-            circles: 圆形列表
-            mask: 二值掩码图像
-            intermediate_images: 中间处理结果字典（仅当 return_intermediate=True 时返回）
     """
     intermediate_images = {}
     
@@ -128,14 +158,9 @@ def detect_circles(gray, img_shape, min_area=1, min_circularity=0.75, max_aspect
     if return_intermediate:
         intermediate_images['02_edges_canny'] = edges_canny
     
-    # 3. 二值化（增强边缘）
-    _, binary_thresh = cv2.threshold(edges_canny, 127, 255, cv2.THRESH_BINARY)
-    if return_intermediate:
-        intermediate_images['03_binary_thresh'] = binary_thresh
-    
     # 4. 膨胀操作（闭合断裂的边缘）
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (8, 8))
-    dilated = cv2.dilate(binary_thresh, kernel, iterations=1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (18, 18))
+    dilated = cv2.dilate(edges_canny, kernel, iterations=1)
     if return_intermediate:
         intermediate_images['04_dilated'] = dilated
     
@@ -172,11 +197,32 @@ def detect_circles(gray, img_shape, min_area=1, min_circularity=0.75, max_aspect
         aspect_ratio = width / height if height != 0 else 1
         aspect_ratio_diff = abs(aspect_ratio - 1)
         
-        epsilon = 0.02 * cv2.arcLength(cnt, True)
+        # 优化四边形检测
+        epsilon = 0.03 * cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, epsilon, True)
+        approx = np.squeeze(approx)
         is_quadrilateral = len(approx) == 4
         
-        if circularity >= min_circularity and aspect_ratio_diff <= max_aspect_ratio_diff and not is_quadrilateral:
+        # 额外的正方形检测
+        is_square = False
+        if is_quadrilateral:
+            # 计算四个边的长度
+            side_lengths = []
+            for i in range(4):
+                p1 = approx[i]
+                p2 = approx[(i+1)%4]
+                length = np.linalg.norm(p1 - p2)
+                side_lengths.append(length)
+            
+            # 检查边长是否接近相等
+            if len(side_lengths) == 4:
+                mean_length = np.mean(side_lengths)
+                length_std = np.std(side_lengths)
+                if length_std / mean_length < 0.1:  # 边长标准差小于10%
+                    is_square = True
+        
+        # 提高圆度阈值，防止正方形被误识别
+        if circularity >= min_circularity and aspect_ratio_diff <= max_aspect_ratio_diff and not is_quadrilateral and not is_square:
             circle_count += 1
             
             (center_x, center_y), radius = cv2.minEnclosingCircle(cnt)
@@ -204,70 +250,84 @@ def detect_circles(gray, img_shape, min_area=1, min_circularity=0.75, max_aspect
     return circles, mask
 
 
-def draw_rectangles_on_image(img, rectangles):
+def process_shape_detection(img, gray, img_shape, shape_type, detect_func, min_area, **detect_kwargs):
     """
-    在图像上绘制矩形
+    处理形状检测并显示结果（合并后的简化函数）
     """
-    result_img = img.copy()
-    for rect in rectangles:
-        # 绘制矩形轮廓
-        box = rect['contour']
-        cv2.drawContours(result_img, [box], 0, (0, 0, 255), 2)
-        # 标注矩形编号
-        center = (int(rect['center'][0]), int(rect['center'][1]))
-        cv2.putText(result_img, f"Rect {rect['id']}", 
-                    (center[0]-30, center[1]), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-    return result_img
-
-
-def draw_circles_on_image(img, circles):
-    """
-    在图像上绘制圆形
-    """
-    result_img = img.copy()
-    for circle in circles:
-        # 绘制圆形轮廓
-        center = (int(circle['center'][0]), int(circle['center'][1]))
-        radius = int(circle['radius'])
-        cv2.circle(result_img, center, radius, (255, 0, 0), 2)
-        # 绘制圆心
-        cv2.circle(result_img, center, 3, (0, 255, 0), -1)
-        # 标注圆形编号
-        cv2.putText(result_img, f"Circle {circle['id']}", 
-                    (center[0]-30, center[1]), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
-    return result_img
-
-
-def display_intermediate_images_step_by_step(intermediate_images, title_prefix):
-    """
-    逐张显示中间处理结果图像，按回车键显示下一张
-    """
-    for name, img in intermediate_images.items():
-        cv2.imshow(f"{title_prefix} - {name}", img)
-        print(f"显示: {title_prefix} - {name}（按回车键继续，按ESC键退出）")
-        key = cv2.waitKey(0)
+    # 执行检测
+    shapes, mask, intermediate = detect_func(
+        gray, img_shape, min_area=min_area, return_intermediate=True, **detect_kwargs
+    )
+    
+    # 显示检测结果
+    print("="*50)
+    print(f"{shape_type}识别结果：")
+    print("="*50)
+    
+    if shape_type == 'rectangle':
+        for shape in shapes:
+            print(f"\n【{shape_type} {shape['id']}】")
+            print(f"  中心坐标：{shape['center']}")
+            print(f"  长边长度：{shape['long_side']} 像素")
+            print(f"  短边长度：{shape['short_side']} 像素")
+            print(f"  长宽比：{shape['aspect_ratio']}")
+            print(f"  旋转角度：{shape['angle']} 度")
+            print(f"  面积：{shape['area']} 像素²")
+    else:  # circle
+        for shape in shapes:
+            print(f"\n【{shape_type} {shape['id']}】")
+            print(f"  中心坐标：{shape['center']}")
+            print(f"  半径：{shape['radius']} 像素")
+            print(f"  直径：{shape['diameter']} 像素")
+            print(f"  圆度：{shape['circularity']}")
+            print(f"  面积：{shape['area']} 像素²")
+    
+    if len(shapes) == 0:
+        print(f"\n未检测到符合条件的{shape_type}！")
+    else:
+        print(f"\n共检测到 {len(shapes)} 个{shape_type}")
+    
+    # 显示中间处理结果
+    for name, intermediate_img in intermediate.items():
+        cv2.imshow(f"{shape_type.capitalize()} - {name}", intermediate_img)
+        print(f"显示: {shape_type.capitalize()} - {name}")
+        cv2.waitKey(0)
         cv2.destroyAllWindows()
-        
-        # 按ESC键退出
-        if key == 27:
-            break
-
-
-def display_image_with_prompt(img, window_name, prompt):
-    """
-    显示单张图像，按回车键继续
-    """
-    cv2.imshow(window_name, img)
-    print(f"显示: {window_name}（{prompt}）")
-    key = cv2.waitKey(0)
+    
+    # 显示最终掩码
+    cv2.imshow(f"{shape_type.capitalize()} - Final_Mask", mask)
+    print(f"显示: {shape_type.capitalize()} - Final_Mask")
+    cv2.waitKey(0)
     cv2.destroyAllWindows()
     
-    # 按ESC键退出
-    if key == 27:
-        return False
-    return True
+    # 绘制并显示带标记的原图
+    result_img = img.copy()
+    if shape_type == 'rectangle':
+        for shape in shapes:
+            box = shape['contour']
+            cv2.drawContours(result_img, [box], 0, (0, 0, 255), 2)
+            center = (int(shape['center'][0]), int(shape['center'][1]))
+            cv2.putText(result_img, f"Rect {shape['id']}", 
+                        (center[0]-30, center[1]), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+    else:  # circle
+        for shape in shapes:
+            center = (int(shape['center'][0]), int(shape['center'][1]))
+            radius = int(shape['radius'])
+            cv2.circle(result_img, center, radius, (255, 0, 0), 2)
+            cv2.circle(result_img, center, 3, (0, 255, 0), -1)
+            cv2.putText(result_img, f"Circle {shape['id']}", 
+                        (center[0]-30, center[1]), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+    
+    cv2.imshow(f"{shape_type.capitalize()} - Marked_Original", result_img)
+    print(f"显示: {shape_type.capitalize()} - Marked_Original")
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    
+    # 保存结果
+    cv2.imwrite(f"result/{shape_type}_mask.jpg", mask)
+    cv2.imwrite(f"result/{shape_type}_marked.jpg", result_img)
 
 
 # 主程序入口
@@ -282,86 +342,28 @@ if __name__ == "__main__":
         img_shape = img.shape[:2]
         
         # 显示原始灰度图
-        if not display_image_with_prompt(gray, "00_Original_Gray", "按回车键继续"):
-            exit()
+        cv2.imshow("00_Original_Gray", gray)
+        print("显示: 00_Original_Gray")
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         
-        # ========== 矩形检测 ==========
-        rectangles, rect_mask, rect_intermediate = detect_rectangles(
-            gray, img_shape, min_area=100, return_intermediate=True
+        # 执行矩形检测
+        process_shape_detection(
+            img, gray, img_shape, 'rectangle',
+            detect_rectangles, min_area=700
         )
-        
-        print("="*50)
-        print("矩形识别结果：")
-        print("="*50)
-        
-        for rect in rectangles:
-            print(f"\n【矩形 {rect['id']}】")
-            print(f"  中心坐标：{rect['center']}")
-            print(f"  长边长度：{rect['long_side']} 像素")
-            print(f"  短边长度：{rect['short_side']} 像素")
-            print(f"  长宽比：{rect['aspect_ratio']}")
-            print(f"  旋转角度：{rect['angle']} 度（相对于水平轴）")
-            print(f"  面积：{rect['area']} 像素²")
-        
-        if len(rectangles) == 0:
-            print("\n未检测到符合条件的矩形！")
-        else:
-            print(f"\n共检测到 {len(rectangles)} 个矩形")
-        
-        # 逐张显示矩形检测的中间结果
-        display_intermediate_images_step_by_step(rect_intermediate, "Rect")
-        
-        # 显示最终掩码
-        if not display_image_with_prompt(rect_mask, "Rect - Final_Mask", "按回车键继续"):
-            exit()
-        
-        # 显示带矩形标记的原图
-        rect_marked_img = draw_rectangles_on_image(img, rectangles)
-        if not display_image_with_prompt(rect_marked_img, "Rect - Marked_Original", "按回车键继续圆形检测"):
-            exit()
-        
-        cv2.imwrite("result/rectangle_mask.jpg", rect_mask)
-        cv2.imwrite("result/rectangle_marked.jpg", rect_marked_img)
-        
-        # ========== 圆形检测 ==========
-        circles, circle_mask, circle_intermediate = detect_circles(
-            gray, img_shape, min_area=1200, min_circularity=0.80, max_aspect_ratio_diff=0.2, return_intermediate=True
-        )
-        
-        print("\n" + "="*50)
-        print("圆形识别结果：")
-        print("="*50)
-        
-        for circle in circles:
-            print(f"\n【圆形 {circle['id']}】")
-            print(f"  中心坐标：{circle['center']}")
-            print(f"  半径：{circle['radius']} 像素")
-            print(f"  直径：{circle['diameter']} 像素")
-            print(f"  圆度：{circle['circularity']}")
-            print(f"  面积：{circle['area']} 像素²")
-        
-        if len(circles) == 0:
-            print("\n未检测到符合条件的圆形！")
-        else:
-            print(f"\n共检测到 {len(circles)} 个圆形")
         
         # 显示原始灰度图
-        if not display_image_with_prompt(gray, "00_Original_Gray", "按回车键继续"):
-            exit()
+        cv2.imshow("00_Original_Gray", gray)
+        print("显示: 00_Original_Gray")
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         
-        # 逐张显示圆形检测的中间结果
-        display_intermediate_images_step_by_step(circle_intermediate, "Circle")
-        
-        # 显示最终掩码
-        if not display_image_with_prompt(circle_mask, "Circle - Final_Mask", "按回车键继续"):
-            exit()
-        
-        # 显示带圆形标记的原图
-        circle_marked_img = draw_circles_on_image(img, circles)
-        if not display_image_with_prompt(circle_marked_img, "Circle - Marked_Original", "按回车键退出"):
-            exit()
-        
-        cv2.imwrite("result/circle_mask.jpg", circle_mask)
-        cv2.imwrite("result/circle_marked.jpg", circle_marked_img)
+        # 执行圆形检测
+        process_shape_detection(
+            img, gray, img_shape, 'circle',
+            detect_circles, min_area=700,
+            min_circularity=0.80, max_aspect_ratio_diff=0.15
+        )
         
         print("\n程序结束。")
