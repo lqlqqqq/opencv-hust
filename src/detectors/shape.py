@@ -2,19 +2,25 @@ import cv2
 import numpy as np
 
 
-def detect_rectangles(gray, img_shape, min_area=1, return_intermediate=False):
+def detect_rectangles(img, img_shape, min_area=1, return_intermediate=False):
     """
-    检测灰度图像中的矩形，返回几何信息和掩码
+    检测图像中的矩形，返回几何信息和掩码
+    输入为BGR彩色图像，对RGB三通道分别进行Canny后合并
     """
     intermediate_images = {}
-    
-    # 1. 高斯模糊降噪
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # 1. 高斯模糊降噪（对彩色图）
+    blurred = cv2.GaussianBlur(img, (5, 5), 0)
     if return_intermediate:
         intermediate_images['01_blurred'] = blurred
-    
-    # 2. Canny边缘检测
-    edges_canny = cv2.Canny(blurred, 50, 150)
+
+    # 2. 分离RGB三通道，分别Canny后合并
+    b, g, r = cv2.split(blurred)
+    edges_b = cv2.Canny(b, 50, 150)
+    edges_g = cv2.Canny(g, 50, 150)
+    edges_r = cv2.Canny(r, 50, 150)
+    edges_canny = cv2.bitwise_or(edges_b, edges_g)
+    edges_canny = cv2.bitwise_or(edges_canny, edges_r)
     if return_intermediate:
         intermediate_images['02_edges_canny'] = edges_canny
     
@@ -142,24 +148,30 @@ def detect_rectangles(gray, img_shape, min_area=1, return_intermediate=False):
     return rectangles, mask
 
 
-def detect_circles(gray, img_shape, min_area=1, min_circularity=0.75, max_aspect_ratio_diff=0.2, return_intermediate=False):
+def detect_circles(img, img_shape, min_area=1, min_circularity=0.75, max_aspect_ratio_diff=0.2, return_intermediate=False):
     """
-    检测灰度图像中的圆形，返回几何信息和掩码
+    检测图像中的圆形，返回几何信息和掩码
+    输入为BGR彩色图像，对RGB三通道分别进行Canny后合并
     """
     intermediate_images = {}
-    
-    # 1. 高斯模糊降噪
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # 1. 高斯模糊降噪（对彩色图）
+    blurred = cv2.GaussianBlur(img, (5, 5), 0)
     if return_intermediate:
         intermediate_images['01_blurred'] = blurred
-    
-    # 2. Canny边缘检测
-    edges_canny = cv2.Canny(blurred, 50, 150)
+
+    # 2. 分离RGB三通道，分别Canny后合并
+    b, g, r = cv2.split(blurred)
+    edges_b = cv2.Canny(b, 50, 150)
+    edges_g = cv2.Canny(g, 50, 150)
+    edges_r = cv2.Canny(r, 50, 150)
+    edges_canny = cv2.bitwise_or(edges_b, edges_g)
+    edges_canny = cv2.bitwise_or(edges_canny, edges_r)
     if return_intermediate:
         intermediate_images['02_edges_canny'] = edges_canny
     
     # 4. 膨胀操作（闭合断裂的边缘）
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (18, 18))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 8))
     dilated = cv2.dilate(edges_canny, kernel, iterations=1)
     if return_intermediate:
         intermediate_images['04_dilated'] = dilated
@@ -250,13 +262,13 @@ def detect_circles(gray, img_shape, min_area=1, min_circularity=0.75, max_aspect
     return circles, mask
 
 
-def process_shape_detection(img, gray, img_shape, shape_type, detect_func, min_area, **detect_kwargs):
+def process_shape_detection(img, img_shape, shape_type, detect_func, min_area, **detect_kwargs):
     """
     处理形状检测并显示结果（合并后的简化函数）
     """
     # 执行检测
     shapes, mask, intermediate = detect_func(
-        gray, img_shape, min_area=min_area, return_intermediate=True, **detect_kwargs
+        img, img_shape, min_area=min_area, return_intermediate=True, **detect_kwargs
     )
     
     # 显示检测结果
@@ -332,36 +344,35 @@ def process_shape_detection(img, gray, img_shape, shape_type, detect_func, min_a
 
 # 主程序入口
 if __name__ == "__main__":
-    image_path = "C:/Users/A/Documents/opencv-hust/data/test001.png"
+    image_path = "C:/Users/A/Documents/opencv-hust/data/test002.png"
     
     img = cv2.imread(image_path)
     if img is None:
         print(f"错误：无法读取图片 {image_path}")
     else:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img_shape = img.shape[:2]
-        
-        # 显示原始灰度图
-        cv2.imshow("00_Original_Gray", gray)
-        print("显示: 00_Original_Gray")
+
+        # 显示原始图像
+        cv2.imshow("00_Original", img)
+        print("显示: 00_Original")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-        
+
         # 执行矩形检测
         process_shape_detection(
-            img, gray, img_shape, 'rectangle',
+            img, img_shape, 'rectangle',
             detect_rectangles, min_area=700
         )
-        
-        # 显示原始灰度图
-        cv2.imshow("00_Original_Gray", gray)
-        print("显示: 00_Original_Gray")
+
+        # 显示原始图像
+        cv2.imshow("00_Original", img)
+        print("显示: 00_Original")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-        
+
         # 执行圆形检测
         process_shape_detection(
-            img, gray, img_shape, 'circle',
+            img, img_shape, 'circle',
             detect_circles, min_area=700,
             min_circularity=0.80, max_aspect_ratio_diff=0.15
         )
