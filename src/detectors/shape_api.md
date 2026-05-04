@@ -20,12 +20,12 @@ def detect_rectangles(img, img_shape, min_area=1, return_intermediate=False):
 
 #### 参数说明
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `img` | numpy.ndarray | - | BGR彩色图像，内部会自动分离RGB三通道分别提取边缘后合并 |
-| `img_shape` | tuple | - | 原始图像尺寸 `(height, width)`，用于创建掩码 |
-| `min_area` | float | 1 | 最小检测面积，用于过滤小噪点 |
-| `return_intermediate` | bool | False | 是否返回中间处理结果（用于可视化调试） |
+| 参数                  | 类型          | 默认值 | 说明                                                   |
+| --------------------- | ------------- | ------ | ------------------------------------------------------ |
+| `img`                 | numpy.ndarray | -      | HSV彩色图像，内部会自动分离RGB三通道分别提取边缘后合并 |
+| `img_shape`           | tuple         | -      | 原始图像尺寸 `(height, width)`，用于创建掩码           |
+| `min_area`            | float         | 1      | 最小检测面积，用于过滤小噪点                           |
+| `return_intermediate` | bool          | False  | 是否返回中间处理结果（用于可视化调试）                 |
 
 #### 返回值
 
@@ -35,10 +35,10 @@ def detect_rectangles(img, img_shape, min_area=1, return_intermediate=False):
 return rectangles, mask
 ```
 
-| 返回值 | 类型 | 说明 |
-|--------|------|------|
-| `rectangles` | list[dict] | 矩形列表 |
-| `mask` | numpy.ndarray | 二值掩码图像（与输入图像同尺寸） |
+| 返回值       | 类型          | 说明                             |
+| ------------ | ------------- | -------------------------------- |
+| `rectangles` | list[dict]    | 矩形列表                         |
+| `mask`       | numpy.ndarray | 二值掩码图像（与输入图像同尺寸） |
 
 **当 `return_intermediate=True` 时：**
 
@@ -46,8 +46,8 @@ return rectangles, mask
 return rectangles, mask, intermediate_images
 ```
 
-| 返回值 | 类型 | 说明 |
-|--------|------|------|
+| 返回值                | 类型 | 说明                   |
+| --------------------- | ---- | ---------------------- |
 | `intermediate_images` | dict | 每一步预处理的结果图像 |
 
 #### 矩形信息结构
@@ -82,14 +82,14 @@ def detect_circles(img, img_shape, min_area=1, min_circularity=0.75,
 
 #### 参数说明
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `img` | numpy.ndarray | - | BGR彩色图像，内部会自动分离RGB三通道分别提取边缘后合并 |
-| `img_shape` | tuple | - | 原始图像尺寸 `(height, width)` |
-| `min_area` | float | 1 | 最小检测面积 |
-| `min_circularity` | float | 0.75 | 最小圆度阈值（1.0为正圆，值越大要求越严格） |
-| `max_aspect_ratio_diff` | float | 0.2 | 最大宽高比差异（值越小要求越接近正圆） |
-| `return_intermediate` | bool | False | 是否返回中间处理结果 |
+| 参数                    | 类型          | 默认值 | 说明                                                   |
+| ----------------------- | ------------- | ------ | ------------------------------------------------------ |
+| `img`                   | numpy.ndarray | -      | HSV彩色图像，内部会自动分离RGB三通道分别提取边缘后合并 |
+| `img_shape`             | tuple         | -      | 原始图像尺寸 `(height, width)`                         |
+| `min_area`              | float         | 1      | 最小检测面积                                           |
+| `min_circularity`       | float         | 0.75   | 最小圆度阈值（1.0为正圆，值越大要求越严格）            |
+| `max_aspect_ratio_diff` | float         | 0.2    | 最大宽高比差异（值越小要求越接近正圆）                 |
+| `return_intermediate`   | bool          | False  | 是否返回中间处理结果                                   |
 
 #### 返回值
 
@@ -99,10 +99,10 @@ def detect_circles(img, img_shape, min_area=1, min_circularity=0.75,
 return circles, mask
 ```
 
-| 返回值 | 类型 | 说明 |
-|--------|------|------|
-| `circles` | list[dict] | 圆形列表 |
-| `mask` | numpy.ndarray | 二值掩码图像 |
+| 返回值    | 类型          | 说明         |
+| --------- | ------------- | ------------ |
+| `circles` | list[dict]    | 圆形列表     |
+| `mask`    | numpy.ndarray | 二值掩码图像 |
 
 **当 `return_intermediate=True` 时：**
 
@@ -141,14 +141,14 @@ def process_shape_detection(img, img_shape, shape_type, detect_func, min_area, *
 
 #### 参数说明
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `img` | numpy.ndarray | 原始BGR彩色图像 |
-| `img_shape` | tuple | 图像尺寸 |
-| `shape_type` | str | 形状类型：`'rectangle'` 或 `'circle'` |
-| `detect_func` | callable | 检测函数（传入 `detect_rectangles` 或 `detect_circles`） |
-| `min_area` | float | 最小面积 |
-| `**detect_kwargs` | - | 检测函数的其他参数（如 `min_circularity`、`max_aspect_ratio_diff` 等） |
+| 参数              | 类型          | 说明                                                                   |
+| ----------------- | ------------- | ---------------------------------------------------------------------- |
+| `img`             | numpy.ndarray | 原始BGR彩色图像                                                        |
+| `img_shape`       | tuple         | 图像尺寸                                                               |
+| `shape_type`      | str           | 形状类型：`'rectangle'` 或 `'circle'`                                  |
+| `detect_func`     | callable      | 检测函数（传入 `detect_rectangles` 或 `detect_circles`）               |
+| `min_area`        | float         | 最小面积                                                               |
+| `**detect_kwargs` | -             | 检测函数的其他参数（如 `min_circularity`、`max_aspect_ratio_diff` 等） |
 
 #### 功能说明
 
@@ -216,11 +216,11 @@ process_shape_detection(img, img_shape, 'circle', detect_circles, min_area=200,
 
 ## 四、参数调优建议
 
-| 参数 | 适用检测 | 调优方向 |
-|------|----------|----------|
-| `min_area` | 矩形/圆形 | 根据目标实际大小设置，越大过滤的噪点越多 |
-| `min_circularity` | 圆形 | 要求越严格值越大（最大1.0），调高可过滤方形但可能漏检椭圆 |
-| `max_aspect_ratio_diff` | 圆形 | 要求越严格值越小，调低可排除形状不规则的检测结果 |
+| 参数                    | 适用检测  | 调优方向                                                  |
+| ----------------------- | --------- | --------------------------------------------------------- |
+| `min_area`              | 矩形/圆形 | 根据目标实际大小设置，越大过滤的噪点越多                  |
+| `min_circularity`       | 圆形      | 要求越严格值越大（最大1.0），调高可过滤方形但可能漏检椭圆 |
+| `max_aspect_ratio_diff` | 圆形      | 要求越严格值越小，调低可排除形状不规则的检测结果          |
 
 ---
 

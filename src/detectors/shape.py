@@ -344,7 +344,7 @@ def process_shape_detection(img, img_shape, shape_type, detect_func, min_area, *
 
 # 主程序入口
 if __name__ == "__main__":
-    image_path = "C:/Users/A/Documents/opencv-hust/data/test002.png"
+    image_path = "C:/Users/A/Documents/opencv-hust/data/test001.png"
     
     img = cv2.imread(image_path)
     if img is None:
