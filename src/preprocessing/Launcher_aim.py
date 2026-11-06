@@ -260,9 +260,11 @@ class GreenDotTracker:
         enhanced = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
 
         # 3. 锐化处理
+        # 修正：卷积核元素之和必须为 1，原代码误写为 /9（核和仅 1/9），
+        # 会把整幅画面压暗到原来的 1/9。
         kernel_sharpen = np.array([[-1, -1, -1],
                                    [-1, 9, -1],
-                                   [-1, -1, -1]]) / 9
+                                   [-1, -1, -1]], dtype=np.float32)
         sharpened = cv2.filter2D(enhanced, -1, kernel_sharpen)
 
         return sharpened

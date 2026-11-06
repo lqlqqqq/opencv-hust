@@ -1,0 +1,232 @@
+{
+ "machine": {
+  "platform": "Windows-10-10.0.26300-SP0",
+  "processor": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+  "python": "3.11.7",
+  "opencv": "5.0.0"
+ },
+ "protocol": {
+  "warmup_frames": 10,
+  "repeats": 3,
+  "statistic": "median & p95 over all frames",
+  "resolution": "640x480"
+ },
+ "configs": {
+  "default": {
+   "synthetic_200": {
+    "frames": 600,
+    "total_ms": {
+     "mean": 5.98,
+     "median": 5.79,
+     "p95": 7.57,
+     "min": 4.55,
+     "max": 9.13,
+     "n": 600
+    },
+    "stages_ms": {
+     "preprocess": {
+      "mean": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "n": 600
+     },
+     "color": {
+      "mean": 1.19,
+      "median": 1.17,
+      "p95": 1.54,
+      "min": 0.84,
+      "max": 2.07,
+      "n": 600
+     },
+     "shape": {
+      "mean": 4.74,
+      "median": 4.52,
+      "p95": 6.09,
+      "min": 3.58,
+      "max": 7.8,
+      "n": 600
+     }
+    },
+    "worst_files": [
+     [
+      9.1,
+      "clutter_017.png"
+     ],
+     [
+      9.0,
+      "clutter_035.png"
+     ],
+     [
+      8.7,
+      "clutter_016.png"
+     ]
+    ],
+    "fps_median": 172.7,
+    "fps_p95": 132.1
+   },
+   "real_4": {
+    "frames": 40,
+    "total_ms": {
+     "mean": 12.44,
+     "median": 11.53,
+     "p95": 17.48,
+     "min": 7.55,
+     "max": 20.8,
+     "n": 40
+    },
+    "stages_ms": {
+     "preprocess": {
+      "mean": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "n": 40
+     },
+     "color": {
+      "mean": 1.83,
+      "median": 1.81,
+      "p95": 2.2,
+      "min": 1.18,
+      "max": 2.8,
+      "n": 40
+     },
+     "shape": {
+      "mean": 10.49,
+      "median": 9.77,
+      "p95": 15.22,
+      "min": 6.27,
+      "max": 18.36,
+      "n": 40
+     }
+    },
+    "worst_files": [
+     [
+      20.8,
+      "test001.png"
+     ],
+     [
+      13.0,
+      "test003.png"
+     ],
+     [
+      12.8,
+      "test002.png"
+     ]
+    ],
+    "fps_median": 86.7,
+    "fps_p95": 57.2
+   }
+  },
+  "lowlight": {
+   "synthetic_200": {
+    "frames": 600,
+    "total_ms": {
+     "mean": 11.66,
+     "median": 11.54,
+     "p95": 13.36,
+     "min": 9.29,
+     "max": 14.73,
+     "n": 600
+    },
+    "stages_ms": {
+     "preprocess": {
+      "mean": 5.28,
+      "median": 5.26,
+      "p95": 6.09,
+      "min": 4.12,
+      "max": 7.59,
+      "n": 600
+     },
+     "color": {
+      "mean": 1.38,
+      "median": 1.32,
+      "p95": 1.79,
+      "min": 1.08,
+      "max": 2.34,
+      "n": 600
+     },
+     "shape": {
+      "mean": 4.94,
+      "median": 4.77,
+      "p95": 6.37,
+      "min": 3.74,
+      "max": 7.44,
+      "n": 600
+     }
+    },
+    "worst_files": [
+     [
+      14.7,
+      "clutter_036.png"
+     ],
+     [
+      14.7,
+      "clutter_018.png"
+     ],
+     [
+      14.6,
+      "bright_blur_014.png"
+     ]
+    ],
+    "fps_median": 86.6,
+    "fps_p95": 74.8
+   },
+   "real_4": {
+    "frames": 40,
+    "total_ms": {
+     "mean": 16.18,
+     "median": 15.48,
+     "p95": 20.73,
+     "min": 12.46,
+     "max": 22.13,
+     "n": 40
+    },
+    "stages_ms": {
+     "preprocess": {
+      "mean": 5.58,
+      "median": 5.45,
+      "p95": 6.53,
+      "min": 4.8,
+      "max": 6.93,
+      "n": 40
+     },
+     "color": {
+      "mean": 1.53,
+      "median": 1.54,
+      "p95": 2.03,
+      "min": 1.02,
+      "max": 2.21,
+      "n": 40
+     },
+     "shape": {
+      "mean": 9.0,
+      "median": 8.05,
+      "p95": 13.02,
+      "min": 6.11,
+      "max": 14.79,
+      "n": 40
+     }
+    },
+    "worst_files": [
+     [
+      22.1,
+      "test001.png"
+     ],
+     [
+      17.2,
+      "test003.png"
+     ],
+     [
+      16.9,
+      "test002.png"
+     ]
+    ],
+    "fps_median": 64.6,
+    "fps_p95": 48.2
+   }
+  }
+ }
+}

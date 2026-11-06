@@ -16,7 +16,8 @@ class ColorDetector:
                  min_area: int = 100,
                  confidence_threshold: float = 0.3,
                  enable_morphology: bool = True,
-                 morph_kernel_size: int = 5):
+                 morph_kernel_size: int = 5,
+                 dominance_ratio: float = 0.0):
         """
         初始化颜色检测器
         
@@ -26,11 +27,15 @@ class ColorDetector:
             confidence_threshold: 置信度阈值
             enable_morphology: 是否启用形态学优化
             morph_kernel_size: 形态学核大小
+            dominance_ratio: 通道主导度约束（0 表示不启用）。启用后要求主通道
+                明显强于其它通道，例如红色要求 R > ratio * max(G, B)。
+                用于排除粉/品红/紫这类"色相落进红色区间但并非纯红"的干扰物。
         """
         self.target_color = target_color.lower()
         self.min_area = min_area
         self.confidence_threshold = confidence_threshold
         self.enable_morphology = enable_morphology
+        self.dominance_ratio = float(dominance_ratio)
         
         # HSV颜色范围
         self.color_ranges = {
@@ -54,7 +59,8 @@ class ColorDetector:
         self.total_detections = 0
         self.processing_times = []
     
-    def detect(self, hsv_image: np.ndarray, verbose: bool = True) -> Tuple[List[Dict], np.ndarray]:
+    def detect(self, hsv_image: np.ndarray, verbose: bool = True,
+               bgr_image: Optional[np.ndarray] = None) -> Tuple[List[Dict], np.ndarray]:
         """
         从HSV图像中检测颜色目标
         
@@ -85,6 +91,11 @@ class ColorDetector:
         
         # 4. 查找轮廓
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # 4.5 通道主导度筛选：按轮廓平均色判断，比逐像素判断快一个数量级，
+        #     且不会被单块高光/阴影带偏（详见 _passes_dominance）
+        if self.dominance_ratio > 0 and bgr_image is not None:
+            contours = [c for c in contours if self._passes_dominance(c, bgr_image)]
         
         # 5. 分析轮廓
         detections = []
@@ -116,7 +127,7 @@ class ColorDetector:
             Tuple[List[Dict], np.ndarray]: 检测结果和掩码
         """
         hsv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
-        return self.detect(hsv_image, verbose)
+        return self.detect(hsv_image, verbose, bgr_image=bgr_image)
     
     def _create_color_mask(self, hsv_image: np.ndarray) -> np.ndarray:
         """创建颜色掩膜"""
@@ -129,6 +140,35 @@ class ColorDetector:
             mask = cv2.bitwise_or(mask, color_mask)
         
         return mask
+
+    def _passes_dominance(self, contour: np.ndarray, bgr_image: np.ndarray) -> bool:
+        """按轮廓区域的平均色判断主通道是否主导。
+
+        以红色为例：纯红块 R 远大于 G/B（实测 R/max(G,B) ≈ 2.6~3.6），
+        而粉、品红、紫块的 R/max(G,B) 只有 1.3 左右。
+        要求 R > ratio * max(G, B) 即可排除后一类，而不影响真正的红色目标。
+        """
+        x, y, w, h = cv2.boundingRect(contour)
+        if w <= 0 or h <= 0:
+            return False
+        roi = bgr_image[y:y + h, x:x + w]
+        roi_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.drawContours(roi_mask, [contour - (x, y)], -1, 255, -1)
+        b, g, r = cv2.mean(roi, mask=roi_mask)[:3]
+        m = max(g, b, 1.0)
+        ratio = float(self.dominance_ratio)
+
+        if self.target_color in ("red", "orange"):
+            return r > ratio * m
+        if self.target_color == "green":
+            return g > ratio * max(r, b, 1.0)
+        if self.target_color == "blue":
+            return b > ratio * max(r, g, 1.0)
+        if self.target_color == "yellow":
+            return min(r, g) > ratio * max(b, 1.0)
+        if self.target_color == "purple":
+            return min(r, b) > ratio * max(g, 1.0)
+        return True
     
     def _analyze_contour(self, contour: np.ndarray, detection_id: int) -> Optional[Dict]:
         """分析单个轮廓"""

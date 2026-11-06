@@ -1,0 +1,85 @@
+{
+ "repeatability": [
+  {
+   "noise_sigma": 5.0,
+   "trials": 100,
+   "hit_rate": 1.0,
+   "cx_mean": 386.12,
+   "cy_mean": 271.0,
+   "cx_std": 0.019,
+   "cy_std": 0.05,
+   "radial_std": 0.053,
+   "max_dev": 0.5,
+   "image": "test002"
+  },
+  {
+   "noise_sigma": 10.0,
+   "trials": 100,
+   "hit_rate": 1.0,
+   "cx_mean": 386.12,
+   "cy_mean": 271.05,
+   "cx_std": 0.028,
+   "cy_std": 0.15,
+   "radial_std": 0.153,
+   "max_dev": 0.46,
+   "image": "test002"
+  },
+  {
+   "noise_sigma": 5.0,
+   "trials": 100,
+   "hit_rate": 1.0,
+   "cx_mean": 306.49,
+   "cy_mean": 198.86,
+   "cx_std": 0.029,
+   "cy_std": 0.579,
+   "radial_std": 0.58,
+   "max_dev": 1.33,
+   "image": "test001"
+  },
+  {
+   "noise_sigma": 10.0,
+   "trials": 100,
+   "hit_rate": 1.0,
+   "cx_mean": 306.49,
+   "cy_mean": 199.1,
+   "cx_std": 0.06,
+   "cy_std": 0.631,
+   "radial_std": 0.634,
+   "max_dev": 1.39,
+   "image": "test001"
+  }
+ ],
+ "calibration": {
+  "boards": 6,
+  "board": "9x6 内角，格长 25.0 mm",
+  "image_size": [
+   1280,
+   720
+  ],
+  "rms_reprojection_px": 0.476,
+  "K": [
+   [
+    14045.96,
+    0.0,
+    548.98
+   ],
+   [
+    0.0,
+    14044.64,
+    648.17
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "dist": [
+   -1.2229,
+   968.4135,
+   0.0,
+   0.0,
+   -214837.3396
+  ]
+ }
+}

@@ -1,0 +1,32 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- 生成物 / 运行输出 ----
+result/
+docs/real_images_result.json
+*.log
+
+# ---- 数据集（86 MB，可用 tools/make_dataset.py 一键重建）----
+dataset/
+
+# ---- 含个人信息的材料（学号/手机号/申报书，不入公开库）----
+Material/
+docs/中期检查表-*.docx
+docs/中期检查表-*.pdf
+docs/中期检查附件-图表材料.docx
+tools/personal.local.json
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Office/Word 临时文件 ----
+~$*
+*.tmp
